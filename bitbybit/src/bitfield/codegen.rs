@@ -2,7 +2,7 @@ use crate::bitfield::{
     const_name, mask_for_width_and_offset, mask_name, setter_name, with_name, ArrayInfo,
     BaseDataSize, BitfieldAttributes, CustomType, DefmtVariant, FieldDefinition, BITCOUNT_BOOL,
 };
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, TokenStreamExt as _};
 use std::str::FromStr;
 use std::{collections::HashSet, ops::Range};
@@ -204,12 +204,14 @@ fn generate_getters(
     let doc_comment = &field_definition.doc_comment;
     let field_name = &field_definition.field_name;
 
+    let visibility = &field_definition.visibility;
+
     if let Some(array) = field_definition.array {
         let indexed_count = array.count;
         quote! {
             #(#doc_comment)*
             #[inline]
-            pub const fn #field_name(&self, index: usize) -> #getter_type {
+            #visibility const fn #field_name(&self, index: usize) -> #getter_type {
                 assert!(index < #indexed_count);
                 #converted
             }
@@ -218,7 +220,7 @@ fn generate_getters(
         quote! {
             #(#doc_comment)*
             #[inline]
-            pub const fn #field_name(&self) -> #getter_type {
+            #visibility const fn #field_name(&self) -> #getter_type {
                 #converted
             }
         }
@@ -520,7 +522,10 @@ pub fn make_builder(
 
                 (value_transform, array_type)
             } else {
-                (quote! { self.0.#with_name(__value_mangled)}, quote! { #setter_type })
+                (
+                    quote! { self.0.#with_name(__value_mangled)},
+                    quote! { #setter_type },
+                )
             };
 
             let mut params = vec![];

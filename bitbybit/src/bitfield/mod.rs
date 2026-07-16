@@ -10,6 +10,7 @@ use std::ops::Range;
 use std::str::FromStr;
 use syn::meta::ParseNestedMeta;
 use syn::LitStr;
+use syn::Visibility;
 use syn::{parse_macro_input, Attribute, Data, DeriveInput, LitInt, Token, Type};
 
 /// In the code below, bools are considered to have 0 bits. This lets us distinguish them
@@ -73,6 +74,7 @@ struct FieldDefinition {
     primitive_type: TokenStream2,
     custom_type: CustomType,
     doc_comment: Vec<Attribute>,
+    visibility: Visibility,
 }
 
 // If a convert_type is given, that will be the final getter/setter type. If not, it is the base type
@@ -150,6 +152,7 @@ struct BitfieldAttributes {
     pub debug_trait: bool,
     pub introspect: bool,
     pub defmt_trait: Option<DefmtTrait>,
+    pub use_field_visibility: bool,
 }
 
 impl BitfieldAttributes {
@@ -182,6 +185,10 @@ impl BitfieldAttributes {
         }
         if meta.path.is_ident("forbid_overlaps") {
             self.forbid_overlaps = true;
+            return Ok(());
+        }
+        if meta.path.is_ident("use_field_vis") {
+            self.use_field_visibility = true;
             return Ok(());
         }
         if meta.path.is_ident("debug") {
@@ -284,10 +291,11 @@ pub fn bitfield(args: TokenStream, input: TokenStream) -> TokenStream {
         _ => panic!("bitfield!: Must be used on struct"),
     };
 
-    let field_definitions = match parsing::parse(fields, base_data_size) {
-        Ok(definitions) => definitions,
-        Err(token_stream) => return token_stream.into_compile_error().into(),
-    };
+    let field_definitions =
+        match parsing::parse(bitfield_attrs.use_field_visibility, fields, base_data_size) {
+            Ok(definitions) => definitions,
+            Err(token_stream) => return token_stream.into_compile_error().into(),
+        };
 
     if bitfield_attrs.forbid_overlaps {
         if let Err(e) = check_for_overlaps(&field_definitions, &input) {

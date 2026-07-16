@@ -7,14 +7,18 @@ use quote::{quote, ToTokens};
 use std::ops::{Deref, Range};
 use syn::{
     parse2, spanned::Spanned, Attribute, Error, ExprArray, Field, Fields, GenericArgument,
-    MetaList, PathArguments, Result, Type,
+    MetaList, PathArguments, Result, Type, Visibility,
 };
 
-pub fn parse(fields: &Fields, base_data_size: BaseDataSize) -> Result<Vec<FieldDefinition>> {
+pub fn parse(
+    use_field_visibility: bool,
+    fields: &Fields,
+    base_data_size: BaseDataSize,
+) -> Result<Vec<FieldDefinition>> {
     let mut field_definitions = Vec::with_capacity(fields.len());
 
     for field in fields {
-        match parse_field(base_data_size.exposed, field) {
+        match parse_field(use_field_visibility, base_data_size.exposed, field) {
             Ok(def) => field_definitions.push(def),
             Err(ts) => return Err(ts),
         }
@@ -128,7 +132,11 @@ fn parse_enumeration(ty: &Type, number_of_bits: usize) -> Result<(CustomType, Ty
     ))
 }
 
-fn parse_field(base_data_size: usize, field: &Field) -> Result<FieldDefinition> {
+fn parse_field(
+    use_field_visibility: bool,
+    base_data_size: usize,
+    field: &Field,
+) -> Result<FieldDefinition> {
     let field_name = field.ident.as_ref().unwrap();
 
     let (ty, indexed_count) = {
@@ -387,6 +395,12 @@ fn parse_field(base_data_size: usize, field: &Field) -> Result<FieldDefinition> 
         }
     };
 
+    let visibility = if use_field_visibility {
+        field.vis.clone()
+    } else {
+        Visibility::Public(syn::Token![pub](proc_macro2::Span::call_site()))
+    };
+
     Ok(FieldDefinition {
         field_name: field_name.clone(),
         ranges,
@@ -412,6 +426,7 @@ fn parse_field(base_data_size: usize, field: &Field) -> Result<FieldDefinition> 
         field_type_size_from_data_type: field_type_size_from_data_type.map(|v| v.0),
         is_signed: field_type_size_from_data_type.is_some_and(|v| v.1),
         unsigned_field_type,
+        visibility,
     })
 }
 
